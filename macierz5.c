@@ -350,110 +350,150 @@ void mnoz_macierze_complex(const Complex *a, int a_rows, int a_cols, const Compl
     }
 }
 
+// --- Deklaracje funkcji pomocniczych ---
+void transpose_float(const float *src, float *dst, int rows, int cols);
+void transpose_complex(const Complex *src, Complex *dst, int rows, int cols);
+int save_matrix_float(const char *filename, const float *mat, int rows, int cols);
+int save_matrix_complex(const char *filename, const Complex *mat, int rows, int cols);
+
 int main(int argc, char **argv) {
-    const char *filename1 = "mac1.txt";
-    const char *filename2 = "mac2.txt";
-    int is_complex = 0;
-    // Szybka detekcja: jeśli w pliku jest 'i', to liczby zespolone
-    FILE *f1 = fopen(filename1, "r");
-    char buf[LINE_BUF_SIZE];
-    if (f1) {
-        while (fgets(buf, sizeof(buf), f1)) {
-            if (strchr(buf, 'i')) { is_complex = 1; break; }
-        }
-        fclose(f1);
+    if (argc < 3) {
+        printf("Uzycie:\n");
+        printf("  %s mac1.txt + mac2.txt [wynik.txt]\n", argv[0]);
+        printf("  %s mac1.txt - mac2.txt [wynik.txt]\n", argv[0]);
+        printf("  %s mac1.txt * mac2.txt [wynik.txt]\n", argv[0]);
+        printf("  %s mac1.txt ^ [wynik.txt]\n", argv[0]);
+        printf("  %s mac2.txt ^ [wynik.txt]\n", argv[0]);
+        return 1;
     }
+    // Transpozycja
+    if ((argc == 3 || argc == 4) && strcmp(argv[2], "^") == 0) {
+        const char *infile = argv[1];
+        int is_complex = 0;
+        FILE *f = fopen(infile, "r");
+        char buf[LINE_BUF_SIZE];
+        if (f) { while (fgets(buf, sizeof(buf), f)) { if (strchr(buf, 'i')) { is_complex = 1; break; } } fclose(f); }
+        if (is_complex) {
+            Complex *mat = NULL, *matT = NULL;
+            int rows = 0, cols = 0;
+            if (wczytaj_macierz_complex(infile, &mat, &rows, &cols) != 0) { fprintf(stderr, "Blad wczytywania %s\n", infile); return 1; }
+            matT = malloc((size_t)rows * cols * sizeof(Complex));
+            transpose_complex(mat, matT, rows, cols);
+            printf("Transpozycja macierzy:\n"); wypisz_macierz_complex(matT, cols, rows);
+            if (argc == 4) save_matrix_complex(argv[3], matT, cols, rows);
+            free(mat); free(matT);
+        } else {
+            float *mat = NULL, *matT = NULL;
+            int rows = 0, cols = 0;
+            if (wczytaj_macierz(infile, &mat, &rows, &cols) != 0) { fprintf(stderr, "Blad wczytywania %s\n", infile); return 1; }
+            matT = malloc((size_t)rows * cols * sizeof(float));
+            transpose_float(mat, matT, rows, cols);
+            printf("Transpozycja macierzy:\n"); wypisz_macierz(matT, cols, rows);
+            if (argc == 4) save_matrix_float(argv[3], matT, cols, rows);
+            free(mat); free(matT);
+        }
+        return 0;
+    }
+    // Operacje binarne: + - *
+    if (argc < 4) { fprintf(stderr, "Za malo argumentow!\n"); return 1; }
+    const char *file1 = argv[1];
+    const char *op = argv[2];
+    const char *file2 = argv[3];
+    const char *outfile = (argc >= 5) ? argv[4] : NULL;
+    int is_complex = 0;
+    FILE *f = fopen(file1, "r");
+    char buf[LINE_BUF_SIZE];
+    if (f) { while (fgets(buf, sizeof(buf), f)) { if (strchr(buf, 'i')) { is_complex = 1; break; } } fclose(f); }
     if (is_complex) {
         Complex *mat1 = NULL, *mat2 = NULL, *mat_wynik = NULL;
         int rows1 = 0, cols1 = 0, rows2 = 0, cols2 = 0;
-        if (wczytaj_macierz_complex(filename1, &mat1, &rows1, &cols1) != 0) { fprintf(stderr, "Blad wczytywania %s\n", filename1); return 1; }
-        if (wczytaj_macierz_complex(filename2, &mat2, &rows2, &cols2) != 0) { fprintf(stderr, "Blad wczytywania %s\n", filename2); free(mat1); return 1; }
-        printf("MACIERZ 1:\n"); wypisz_macierz_complex(mat1, rows1, cols1);
-        printf("\nMACIERZ 2:\n"); wypisz_macierz_complex(mat2, rows2, cols2);
-        printf("\nWybierz operacje:\n1 - Dodawanie macierzy\n2 - Mnozenie macierzy\n3 - Odejmowanie macierzy\nTwoj wybor: ");
-        int wybor = 0;
-        if (scanf("%d", &wybor) != 1) { fprintf(stderr, "Blad odczytu wyboru!\n"); free(mat1); free(mat2); return 1; }
-        if (wybor == 1) {
-            if (rows1 != rows2 || cols1 != cols2) {
-                fprintf(stderr, "Nie mozna dodac macierzy o roznych rozmiarach!\n");
-                free(mat1); free(mat2); return 1;
-            }
+        if (wczytaj_macierz_complex(file1, &mat1, &rows1, &cols1) != 0) { fprintf(stderr, "Blad wczytywania %s\n", file1); return 1; }
+        if (wczytaj_macierz_complex(file2, &mat2, &rows2, &cols2) != 0) { fprintf(stderr, "Blad wczytywania %s\n", file2); free(mat1); return 1; }
+        if (strcmp(op, "+") == 0) {
+            if (rows1 != rows2 || cols1 != cols2) { fprintf(stderr, "Nie mozna dodac macierzy o roznych rozmiarach!\n"); free(mat1); free(mat2); return 1; }
             mat_wynik = malloc((size_t)rows1 * cols1 * sizeof(Complex));
-            if (!mat_wynik) { fprintf(stderr, "Brak pamieci na wynik\n"); free(mat1); free(mat2); return 1; }
             dodaj_macierze_complex(mat1, mat2, mat_wynik, rows1, cols1);
-            printf("\nSuma macierzy:\n"); wypisz_macierz_complex(mat_wynik, rows1, cols1);
-            free(mat_wynik);
-        } else if (wybor == 2) {
-            if (cols1 != rows2) {
-                fprintf(stderr, "Nie mozna mnozyc: liczba kolumn macierzy 1 musi byc rowna liczbie wierszy macierzy 2!\n");
-                free(mat1); free(mat2); return 1;
-            }
-            mat_wynik = malloc((size_t)rows1 * cols2 * sizeof(Complex));
-            if (!mat_wynik) { fprintf(stderr, "Brak pamieci na wynik\n"); free(mat1); free(mat2); return 1; }
-            mnoz_macierze_complex(mat1, rows1, cols1, mat2, rows2, cols2, mat_wynik);
-            printf("\nIloczyn macierzy:\n"); wypisz_macierz_complex(mat_wynik, rows1, cols2);
-            free(mat_wynik);
-        } else if (wybor == 3) {
-            if (rows1 != rows2 || cols1 != cols2) {
-                fprintf(stderr, "Nie mozna odjac macierzy o roznych rozmiarach!\n");
-                free(mat1); free(mat2); return 1;
-            }
+            printf("Suma macierzy:\n"); wypisz_macierz_complex(mat_wynik, rows1, cols1);
+            if (outfile) save_matrix_complex(outfile, mat_wynik, rows1, cols1);
+        } else if (strcmp(op, "-") == 0) {
+            if (rows1 != rows2 || cols1 != cols2) { fprintf(stderr, "Nie mozna odjac macierzy o roznych rozmiarach!\n"); free(mat1); free(mat2); return 1; }
             mat_wynik = malloc((size_t)rows1 * cols1 * sizeof(Complex));
-            if (!mat_wynik) { fprintf(stderr, "Brak pamieci na wynik\n"); free(mat1); free(mat2); return 1; }
             odejmij_macierze_complex(mat1, mat2, mat_wynik, rows1, cols1);
-            printf("\nRoznica macierzy:\n"); wypisz_macierz_complex(mat_wynik, rows1, cols1);
-            free(mat_wynik);
-        } else {
-            printf("Nieznana operacja.\n");
-        }
-        free(mat1); free(mat2);
-        return 0;
+            printf("Roznica macierzy:\n"); wypisz_macierz_complex(mat_wynik, rows1, cols1);
+            if (outfile) save_matrix_complex(outfile, mat_wynik, rows1, cols1);
+        } else if (strcmp(op, "*") == 0) {
+            if (cols1 != rows2) { fprintf(stderr, "Nie mozna mnozyc: liczba kolumn macierzy 1 musi byc rowna liczbie wierszy macierzy 2!\n"); free(mat1); free(mat2); return 1; }
+            mat_wynik = malloc((size_t)rows1 * cols2 * sizeof(Complex));
+            mnoz_macierze_complex(mat1, rows1, cols1, mat2, rows2, cols2, mat_wynik);
+            printf("Iloczyn macierzy:\n"); wypisz_macierz_complex(mat_wynik, rows1, cols2);
+            if (outfile) save_matrix_complex(outfile, mat_wynik, rows1, cols2);
+        } else { fprintf(stderr, "Nieznana operacja: %s\n", op); free(mat1); free(mat2); return 1; }
+        free(mat1); free(mat2); free(mat_wynik);
     } else {
         float *mat1 = NULL, *mat2 = NULL, *mat_wynik = NULL;
         int rows1 = 0, cols1 = 0, rows2 = 0, cols2 = 0;
-        if (wczytaj_macierz(filename1, &mat1, &rows1, &cols1) != 0) { fprintf(stderr, "Blad wczytywania %s\n", filename1); return 1; }
-        if (wczytaj_macierz(filename2, &mat2, &rows2, &cols2) != 0) { fprintf(stderr, "Blad wczytywania %s\n", filename2); free(mat1); return 1; }
-        printf("MACIERZ 1:\n"); wypisz_macierz(mat1, rows1, cols1);
-        printf("\nMACIERZ 2:\n"); wypisz_macierz(mat2, rows2, cols2);
-
-        printf("\nWybierz operacje:\n1 - Dodawanie macierzy\n2 - Odejmowanie macierzy\n3 - Mnozenie macierzy\nTwoj wybor: ");
-        int wybor = 0;
-        if (scanf("%d", &wybor) != 1) { fprintf(stderr, "Blad odczytu wyboru!\n"); free(mat1); free(mat2); return 1; }
-
-        if (wybor == 1) {
-            if (rows1 != rows2 || cols1 != cols2) {
-                fprintf(stderr, "Nie mozna dodac macierzy o roznych rozmiarach!\n");
-                free(mat1); free(mat2); return 1;
-            }
+        if (wczytaj_macierz(file1, &mat1, &rows1, &cols1) != 0) { fprintf(stderr, "Blad wczytywania %s\n", file1); return 1; }
+        if (wczytaj_macierz(file2, &mat2, &rows2, &cols2) != 0) { fprintf(stderr, "Blad wczytywania %s\n", file2); free(mat1); return 1; }
+        if (strcmp(op, "+") == 0) {
+            if (rows1 != rows2 || cols1 != cols2) { fprintf(stderr, "Nie mozna dodac macierzy o roznych rozmiarach!\n"); free(mat1); free(mat2); return 1; }
             mat_wynik = malloc((size_t)rows1 * cols1 * sizeof(float));
-            if (!mat_wynik) { fprintf(stderr, "Brak pamieci na wynik\n"); free(mat1); free(mat2); return 1; }
             dodaj_macierze(mat1, mat2, mat_wynik, rows1, cols1);
-            printf("\nSuma macierzy:\n"); wypisz_macierz(mat_wynik, rows1, cols1);
-            free(mat_wynik);
-        } else if (wybor == 3) {
-            if (cols1 != rows2) {
-                fprintf(stderr, "Nie mozna mnozyc: liczba kolumn macierzy 1 musi byc rowna liczbie wierszy macierzy 2!\n");
-                free(mat1); free(mat2); return 1;
-            }
-            mat_wynik = malloc((size_t)rows1 * cols2 * sizeof(float));
-            if (!mat_wynik) { fprintf(stderr, "Brak pamieci na wynik\n"); free(mat1); free(mat2); return 1; }
-            mnoz_macierze(mat1, rows1, cols1, mat2, rows2, cols2, mat_wynik);
-            printf("\nIloczyn macierzy:\n"); wypisz_macierz(mat_wynik, rows1, cols2);
-            free(mat_wynik);
-        } else if (wybor == 2) {
-            if (rows1 != rows2 || cols1 != cols2) {
-                fprintf(stderr, "Nie mozna odjac macierzy o roznych rozmiarach!\n");
-                free(mat1); free(mat2); return 1;
-            }
+            printf("Suma macierzy:\n"); wypisz_macierz(mat_wynik, rows1, cols1);
+            if (outfile) save_matrix_float(outfile, mat_wynik, rows1, cols1);
+        } else if (strcmp(op, "-") == 0) {
+            if (rows1 != rows2 || cols1 != cols2) { fprintf(stderr, "Nie mozna odjac macierzy o roznych rozmiarach!\n"); free(mat1); free(mat2); return 1; }
             mat_wynik = malloc((size_t)rows1 * cols1 * sizeof(float));
-            if (!mat_wynik) { fprintf(stderr, "Brak pamieci na wynik\n"); free(mat1); free(mat2); return 1; }
             odejmij_macierze(mat1, mat2, mat_wynik, rows1, cols1);
-            printf("\nRoznica macierzy:\n"); wypisz_macierz(mat_wynik, rows1, cols1);
-            free(mat_wynik);
-        } else {
-            printf("Nieznana operacja.\n");
-        }
-        free(mat1); free(mat2);
-        return 0;
+            printf("Roznica macierzy:\n"); wypisz_macierz(mat_wynik, rows1, cols1);
+            if (outfile) save_matrix_float(outfile, mat_wynik, rows1, cols1);
+        } else if (strcmp(op, "*") == 0) {
+            if (cols1 != rows2) { fprintf(stderr, "Nie mozna mnozyc: liczba kolumn macierzy 1 musi byc rowna liczbie wierszy macierzy 2!\n"); free(mat1); free(mat2); return 1; }
+            mat_wynik = malloc((size_t)rows1 * cols2 * sizeof(float));
+            mnoz_macierze(mat1, rows1, cols1, mat2, rows2, cols2, mat_wynik);
+            printf("Iloczyn macierzy:\n"); wypisz_macierz(mat_wynik, rows1, cols2);
+            if (outfile) save_matrix_float(outfile, mat_wynik, rows1, cols2);
+        } else { fprintf(stderr, "Nieznana operacja: %s\n", op); free(mat1); free(mat2); return 1; }
+        free(mat1); free(mat2); free(mat_wynik);
     }
+    return 0;
+}
+
+// --- Implementacje funkcji pomocniczych ---
+void transpose_float(const float *src, float *dst, int rows, int cols) {
+    for (int i = 0; i < rows; ++i)
+        for (int j = 0; j < cols; ++j)
+            dst[j * rows + i] = src[i * cols + j];
+}
+void transpose_complex(const Complex *src, Complex *dst, int rows, int cols) {
+    for (int i = 0; i < rows; ++i)
+        for (int j = 0; j < cols; ++j)
+            dst[j * rows + i] = src[i * cols + j];
+}
+int save_matrix_float(const char *filename, const float *mat, int rows, int cols) {
+    FILE *f = fopen(filename, "w");
+    if (!f) return 1;
+    fprintf(f, "%d\t%d\n", rows, cols);
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            fprintf(f, "%g", mat[i * cols + j]);
+            if (j + 1 < cols) fprintf(f, "\t");
+        }
+        fprintf(f, "\n");
+    }
+    fclose(f);
+    return 0;
+}
+int save_matrix_complex(const char *filename, const Complex *mat, int rows, int cols) {
+    FILE *f = fopen(filename, "w");
+    if (!f) return 1;
+    fprintf(f, "%d\t%d\n", rows, cols);
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            fprintf(f, "%.2f%+.2fi", mat[i * cols + j].re, mat[i * cols + j].im);
+            if (j + 1 < cols) fprintf(f, "\t");
+        }
+        fprintf(f, "\n");
+    }
+    fclose(f);
+    return 0;
 }
