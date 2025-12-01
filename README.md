@@ -6,3 +6,5 @@ Program kalkulujący dodawania, odejmowanie, mnożenie i transponowanie macierzy
 ./a.out mac2.txt ^ wynik.txt
 
 (+ , - , \* , ^)
+
+w przypadku mnożenia czasem trzeba użyć "\*" z powodu globbingu
