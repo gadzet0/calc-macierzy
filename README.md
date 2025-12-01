@@ -7,4 +7,4 @@ Program kalkulujący dodawania, odejmowanie, mnożenie i transponowanie macierzy
 
 (+ , - , \* , ^)
 
-w przypadku mnożenia czasem trzeba użyć "\*" z powodu globbingu
+w przypadku mnożenia czasem trzeba użyć "\\*" z powodu globbingu
